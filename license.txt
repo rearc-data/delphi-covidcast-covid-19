@@ -1,0 +1,1 @@
+The majority of the data surfaced through this API is more or less just a carefully curated mirror of data acquired from various external parties. Such data is subject to its original licensing, where applicable. https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/README.md#data-licensing
