@@ -7,6 +7,8 @@ Delphi's COVIDcast datasets are based on a variety of data sources including **a
 
 If you are intersted in learning more about Delphi's COVIDcast datasets, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
 
+If you are interested in subscribing to this product on AWS Data Exchange, please click [here](https://aws.amazon.com/marketplace/pp/prodview-uusmw5j7egnck).
+
 ## More Information:
 - [Source: Delphi Epidata | An open API for Epidemiological Data](https://github.com/cmu-delphi/delphi-epidata)
 - [Home Page: Delphi Research Center | Carnegie Mellon University](https://delphi.cmu.edu)

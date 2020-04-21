@@ -32,7 +32,7 @@ do
 done
 
 #creating a pre-processing zip package, these commands may need to be adjusted depending on folder structure and dependencies
-(cd pre-processing/pre-processing-code && rm -r ./pre-processing-code.zip || true; pip install requests --platform manylinux1_x86_64 --only-binary=:all: --python-version 37 --abi cp37m --target . && zip -r pre-processing-code.zip . -x "*.dist-info/*" -x "bin/*" -x "**/__pycache__/*" && rm -r ./*/)
+(cd pre-processing/pre-processing-code && rm -r ./pre-processing-code.zip || true; zip -r pre-processing-code.zip . -x "*.dist-info/*" -x "bin/*" -x "**/__pycache__/*")
 
 #upload pre-preprocessing.zip to s3
 echo "uploading pre-preprocessing.zip to s3"
