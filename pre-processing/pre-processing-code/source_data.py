@@ -1,7 +1,6 @@
 import json
 import csv
 from datetime import date, timedelta, datetime
-import time
 import boto3
 import os
 from urllib.request import urlopen
