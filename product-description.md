@@ -5,7 +5,7 @@ This resource contains an archived collection of datasets from Carnegie Mellon U
 
 Delphi's COVIDcast datasets are based on a variety of data sources including **a CMU-run Facebook health survey, a Google-run health survey, lab test results provided by Quidel Inc, search data released by Google Health Trends, and outpatient doctor visits provided by a national health system**.
 
-If you are intersted in learning more about Delphi's COVIDcast datasets, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
+If you are interested in learning more about Delphi's COVIDcast datasets, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
 
 ## More Information:
 - [Source: Delphi Epidata | An open API for Epidemiological Data](https://github.com/cmu-delphi/delphi-epidata)
@@ -13,6 +13,7 @@ If you are intersted in learning more about Delphi's COVIDcast datasets, please 
 - [COVIDcast | Carnegie Mellon University](https://covidcast.cmu.edu)
 - [Delphi EpiData | Data License](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/README.md#data-licensing)
 - Frequency: Daily
+- Formats: JSON Lines, CSV
 
 ## Contact/Support Information
 - If you find any issues or have enhancements with this product, open up a GitHub [issue](https://github.com/rearc-data/covid-datasets-aws-data-exchange/issues/new) and we will gladly take a look at it. Better yet, submit a pull request. Any contributions you make are greatly appreciated.
