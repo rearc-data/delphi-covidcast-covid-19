@@ -2,6 +2,7 @@ import json
 import csv
 from datetime import date, timedelta, datetime
 import boto3
+import botocore
 import os
 from urllib.request import urlopen
 
@@ -101,6 +102,10 @@ def source_dataset(s3_bucket, new_s3_key):
         with open('/tmp/jsonl~covidcast_meta.jsonl', 'w', encoding='utf-8') as j:
             for datum in data['epidata']:
                 j.write(json.dumps(datum) + '\n')
+
+        s3 = boto3.resource('s3')
+        bucket = s3.Bucket(s3_bucket)
+        bucket.objects.filter(Prefix=new_s3_key).delete()
 
         asset_list = {'csv': [], "jsonl": []}
 
