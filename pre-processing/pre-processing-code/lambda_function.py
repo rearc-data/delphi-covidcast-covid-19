@@ -69,62 +69,81 @@ def start_change_set(describe_entity_response, revision_arn):
 
 
 def lambda_handler(event, context):
-	source_dataset(s3_bucket, new_s3_key)
+	asset_list = source_dataset(s3_bucket, new_s3_key)
 
 	create_revision_response = dataexchange.create_revision(DataSetId=data_set_id)
 	revision_id = create_revision_response['Id']
 	revision_arn = create_revision_response['Arn']
 
 	# Used to store the Ids of the Jobs importing the assets to S3.
-	job_ids = set()
+	job_ids_jsonl = set()
 
-	import_job = dataexchange.create_job(
+	import_job_jsonl = dataexchange.create_job(
 		Type='IMPORT_ASSETS_FROM_S3',
 		Details={
 			'ImportAssetsFromS3': {
 				'DataSetId': data_set_id,
 				'RevisionId': revision_id,
-				'AssetSources': [
-					{
-						'Bucket': s3_bucket,
-						'Key': new_s3_key + 'covidcast_meta.csv'
-					},
-					{
-						'Bucket': s3_bucket,
-						'Key': new_s3_key + 'covidcast_meta.json'
-					},
-					{
-						'Bucket': s3_bucket,
-						'Key': new_s3_key + 'covidcast.csv'
-					},
-					{
-						'Bucket': s3_bucket,
-						'Key': new_s3_key + 'covidcast.json'
-					}
-				]
+				'AssetSources': asset_list['csv']
 			}
 		}
 	)
 
 	# Start the Job and save the JobId.
-	dataexchange.start_job(JobId=import_job['Id'])
-	job_ids.add(import_job['Id'])
+	dataexchange.start_job(JobId=import_job_jsonl['Id'])
+	job_ids_jsonl.add(import_job_jsonl['Id'])
 
 	# Iterate until all remaining jobs have reached a terminal state, or an error is found.
-	completed_jobs = set()
+	completed_jobs_jsonl = set()
 
-	while job_ids != completed_jobs:
-		for job_id in job_ids:
-			if job_id in completed_jobs:
+	while job_ids_jsonl != completed_jobs_jsonl:
+		for job_id_jsonl in job_ids_jsonl:
+			if job_id_jsonl in completed_jobs_jsonl:
 				continue
-			get_job_response = dataexchange.get_job(JobId=job_id)
-			if get_job_response['State'] == 'COMPLETED':
-				print('Job {} completed'.format(job_id))
-				completed_jobs.add(job_id)
-			if get_job_response['State'] == 'ERROR':
-				job_errors = get_job_response['Errors']
+			get_job_response_jsonl = dataexchange.get_job(JobId=job_id_jsonl)
+			if get_job_response_jsonl['State'] == 'COMPLETED':
+				print('Job {} completed'.format(job_id_jsonl))
+				completed_jobs_jsonl.add(job_id_jsonl)
+			if get_job_response_jsonl['State'] == 'ERROR':
+				job_errors_jsonl = get_job_response_jsonl['Errors']
 				raise Exception(
-					'JobId: {} failed with errors:\n{}'.format(job_id, job_errors))
+					'JobId: {} failed with errors:\n{}'.format(job_id_jsonl, job_errors_jsonl))
+			# Sleep to ensure we don't get throttled by the GetJob API.
+			time.sleep(0.2)
+
+	# Used to store the Ids of the Jobs importing the assets to S3.
+	job_ids_csv = set()
+
+	import_job_csv = dataexchange.create_job(
+		Type='IMPORT_ASSETS_FROM_S3',
+		Details={
+			'ImportAssetsFromS3': {
+				'DataSetId': data_set_id,
+				'RevisionId': revision_id,
+				'AssetSources': asset_list['csv']
+			}
+		}
+	)
+
+	# Start the Job and save the JobId.
+	dataexchange.start_job(JobId=import_job_csv['Id'])
+	job_ids_csv.add(import_job_csv['Id'])
+
+	# Iterate until all remaining jobs have reached a terminal state, or an error is found.
+	completed_jobs_csv = set()
+
+	while job_ids_csv != completed_jobs_csv:
+		for job_id_csv in job_ids_csv:
+			if job_id_csv in completed_jobs_csv:
+				continue
+			get_job_response_csv = dataexchange.get_job(JobId=job_id_csv)
+			if get_job_response_csv['State'] == 'COMPLETED':
+				print('Job {} completed'.format(job_id_csv))
+				completed_jobs_csv.add(job_id_csv)
+			if get_job_response_csv['State'] == 'ERROR':
+				job_errors_csv = get_job_response_csv['Errors']
+				raise Exception(
+					'JobId: {} failed with errors:\n{}'.format(job_id_csv, job_errors_csv))
 			# Sleep to ensure we don't get throttled by the GetJob API.
 			time.sleep(0.2)
 
