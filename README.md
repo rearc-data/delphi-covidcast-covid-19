@@ -1,4 +1,4 @@
-# Delphi COVIDcast Open API Data | COVID-19 | Carnegie Mellon University
+# COVIDcast (COVID-19) Epidemiological Data | Delphi Research Group (CMU)
 
 ## Main Description
 This resource contains an archived collection of datasets from Carnegie Mellon University Delphi Research Center's COVID-19 Surveillance Streams Data (COVIDcast) - itself an endpoint in Delphi's Epidata open API for Epidemiological Data.

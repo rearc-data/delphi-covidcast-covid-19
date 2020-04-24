@@ -13,14 +13,14 @@ Once, you have the pre-processing code written and tested locally, you can run t
 
 - Source S3 Bucket: This is the source S3 bucket where the dataset and pre-processing automation code resides. For Rearc datasets, it's `rearc-data-provider`
 - Dataset Name: This is the S3 prefix where the dataset and pre-processing automation code resides. For this e.g., it's `covid-19-delphi-covidcast`
-- Product Name: This is the product name on ADX. For this e.g., it's `COVID-19 | Delphi Covidcast API Stream Data | Carnegie Mellon University`
+- Product Name: This is the product name on ADX. For this e.g., it's `COVIDcast (COVID-19) Epidemiological Data | Delphi Research Group (CMU)`
 - Product ID: Since, ADX does not provide APIs to programmatically create Products, it can be blank for now
 - Region: This is the AWS region where the product will be listed on ADX. For this e.g., it's `us-east-1`
 
 The init script also allows an optional `--profile` parameter to be passed in if you wish to use an alternative set of AWS credentials instead of your default profile.
 
 #### Here is how you can run the init script  
-`./init.sh --s3-bucket "rearc-data-provider" --dataset-name "delphi-covidcast-covid-19" --product-name "Delphi Covidcast Open API Data | COVID-19 | Carnegie Mellon University" --product-id "blank" --region "us-east-1"`
+`./init.sh --s3-bucket "rearc-data-provider" --dataset-name "delphi-covidcast-covid-19" --product-name "COVIDcast (COVID-19) Epidemiological Data | Delphi Research Group (CMU)" --product-id "blank" --region "us-east-1"`
 
 #### If the optional profile parameter is needed, add the following:
 `--profile "rearc-adx-alt"`
