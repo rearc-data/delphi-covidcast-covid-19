@@ -5,9 +5,22 @@ This resource contains an archived collection of datasets from Carnegie Mellon U
 
 Delphi's COVIDcast datasets are based on a variety of data sources including **a CMU-run Facebook health survey, a Google-run health survey, lab test results provided by Quidel Inc, search data released by Google Health Trends, and outpatient doctor visits provided by a national health system**.
 
-If you are interested in learning more about Delphi's COVIDcast datasets, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
-
 If you are interested in subscribing to this product on AWS Data Exchange, please click [here](https://aws.amazon.com/marketplace/pp/prodview-uusmw5j7egnck).
+
+## Schema
+The datasets in this product are delivered with descriptive S3 prefixes set to mirror the same parameters used when interacting directly with the COVIDcast API. A `file_format` parameter has been added as a base prefix to be able to easily navigate between the JSON Lines and CSV versions of this data.
+
+`/<file_format>/<data_source>/< signal >/<time_type>/<geo_type>.<file_extension>`
+
+For example, to access a JSON Lines file covering Facebook survey data for COVID-Like Illnesses (CLI) broken into daily entries by two-letter state codes, you would visit the file at the following path:
+
+`/jsonl/fb-survey/raw_cli/day/state.jsonl`
+
+Individual data entries include the following fields:
+
+`geo_value` | `time_value` | `direction` | `value` | `stderr` | `sample_size`
+
+To learn about valid parameters and fields used in the Delphi's COVIDcast data, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
 
 ## More Information:
 - [Source: Delphi Epidata | An open API for Epidemiological Data](https://github.com/cmu-delphi/delphi-epidata)
