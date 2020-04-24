@@ -18,7 +18,7 @@ Individual data entries include the following fields:
 
 `geo_value` | `time_value` | `direction` | `value` | `stderr` | `sample_size`
 
-To learn about valid parameters and fields used in the Delphi's COVIDcast data, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
+To learn about the valid parameters and fields used in the Delphi's COVIDcast data, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
 
 ## More Information:
 - [Source: Delphi Epidata | An open API for Epidemiological Data](https://github.com/cmu-delphi/delphi-epidata)
