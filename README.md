@@ -35,7 +35,7 @@ To learn about the valid parameters and fields used in the Delphi's COVIDcast da
 - Formats: JSON Lines, CSV
 
 ## Contact Details
-- If you find any issues or have enhancements with this product, open up a GitHub [issue](https://github.com/rearc-data/delphi-covidcast-covid-19/issues) and we will gladly take a look at it. Better yet, submit a pull request. Any contributions you make are greatly appreciated.
+- If you find any issues or have enhancements with this product, open up a GitHub [issue](https://github.com/rearc-data/delphi-covidcast-covid-19/issues) and we will gladly take a look at it. Better yet, submit a pull request. Any contributions you make are greatly appreciated :heart:.
 - If you are interested in any other open datasets, please create a request on our project board [here](https://github.com/rearc-data/covid-datasets-aws-data-exchange/projects/1).
 - If you have questions about this source data, please contact a memeber of the Delphi Research Group by [opening an issue on this project's GitHub page](https://github.com/cmu-delphi/delphi-epidata/issues/new).
 - If you have any other questions or feedback, send us an email at data@rearc.io.
