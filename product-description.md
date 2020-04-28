@@ -1,11 +1,13 @@
 # COVIDcast (COVID-19) Epidemiological Data | Delphi Research Group (CMU)
 
-## Main Description
+The source code outlining how this product gathers, transforms, revises and publishes its datasets is avaiable at [https://github.com/rearc-data/delphi-covidcast-covid-19](https://github.com/rearc-data/delphi-covidcast-covid-19).
+
+## Product Description
 This resource contains an archived collection of datasets from Carnegie Mellon University Delphi Research Group's COVID-19 Surveillance Streams Data (COVIDcast) - itself an endpoint in Delphi's Epidata open API for Epidemiological Data.
 
 Delphi's COVIDcast datasets are based on a variety of data sources including **a CMU-run Facebook health survey, a Google-run health survey, lab test results provided by Quidel Inc, search data released by Google Health Trends, and outpatient doctor visits provided by a national health system**.
 
-## Schema
+#### Data Source
 The datasets in this product are delivered with descriptive S3 prefixes set to mirror the same parameters used when interacting directly with the COVIDcast API. A `file_format` parameter has been added as a base prefix to be able to easily navigate between the JSON Lines and CSV versions of this data.
 
 `/<file_format>/<data_source>/< signal >/<time_type>/<geo_type>.<file_extension>`
@@ -20,7 +22,7 @@ Individual data entries include the following fields:
 
 To learn about the valid parameters and fields used in the Delphi's COVIDcast data, please visit the [Delphi Epidata GitHub repository](https://github.com/cmu-delphi/delphi-epidata/blob/master/docs/api/covidcast.md) where this project is actively maintained.
 
-## More Information:
+## More Information
 - [Source: Delphi Epidata | An open API for Epidemiological Data](https://github.com/cmu-delphi/delphi-epidata)
 - [Home Page: Delphi Research Group | Carnegie Mellon University](https://delphi.cmu.edu)
 - [COVIDcast | Carnegie Mellon University](https://covidcast.cmu.edu)
@@ -28,8 +30,8 @@ To learn about the valid parameters and fields used in the Delphi's COVIDcast da
 - Frequency: Daily
 - Formats: JSON Lines, CSV
 
-## Contact/Support Information
-- If you find any issues or have enhancements with this product, open up a GitHub [issue](https://github.com/rearc-data/covid-datasets-aws-data-exchange/issues/new) and we will gladly take a look at it. Better yet, submit a pull request. Any contributions you make are greatly appreciated.
+## Contact Details
+- If you find any issues or have enhancements with this product, open up a GitHub [issue](https://github.com/rearc-data/delphi-covidcast-covid-19/issues) and we will gladly take a look at it. Better yet, submit a pull request. Any contributions you make are greatly appreciated.
 - If you are interested in any other open datasets, please create a request on our project board [here](https://github.com/rearc-data/covid-datasets-aws-data-exchange/projects/1).
 - If you have questions about this source data, please contact a memeber of the Delphi Research Group by [opening an issue on this project's GitHub page](https://github.com/cmu-delphi/delphi-epidata/issues/new).
 - If you have any other questions or feedback, send us an email at data@rearc.io.
