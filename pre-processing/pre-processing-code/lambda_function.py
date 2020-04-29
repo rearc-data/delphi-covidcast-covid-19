@@ -84,7 +84,7 @@ def lambda_handler(event, context):
 			'ImportAssetsFromS3': {
 				'DataSetId': data_set_id,
 				'RevisionId': revision_id,
-				'AssetSources': asset_list['csv']
+				'AssetSources': asset_list['jsonl']
 			}
 		}
 	)
