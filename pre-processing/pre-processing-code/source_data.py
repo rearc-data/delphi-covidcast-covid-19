@@ -6,7 +6,7 @@ import botocore
 import os
 from urllib.request import urlopen
 
-def query_and_save_api(meta):
+def query_and_save_api(meta, s3_bucket, new_s3_key):
 
     # Saving key terms from data to variables
     data_source = meta['data_source']
@@ -73,9 +73,20 @@ def query_and_save_api(meta):
         start = start + timedelta(days=days_pre_step)
         step = step + timedelta(days=days_pre_step)
 
-    print('Finished saving ' + filename + ' data')
+    s3 = boto3.client('s3')
+    s3.upload_file('/tmp/jsonl~' + filename + '.jsonl', s3_bucket, new_s3_key + 'jsonl/' + filename.replace('~', '/') + '.jsonl')
+    os.remove('/tmp/jsonl~' + filename + '.jsonl')
+    s3.upload_file('/tmp/csv~' + filename + '.csv', s3_bucket, new_s3_key + 'csv/' + filename.replace('~', '/') + '.csv')
+    os.remove('/tmp/csv~' + filename + '.csv')
+
+    print('Uploaded ' + filename)
+    return filename.replace('~', '/')
 
 def source_dataset(s3_bucket, new_s3_key):
+
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(s3_bucket)
+    bucket.objects.filter(Prefix=new_s3_key).delete()
 
     # Response from covidcast_meta enpoint in Delphi API 
     res = urlopen('https://delphi.cmu.edu/epidata/api.php?source=covidcast_meta')
@@ -83,15 +94,26 @@ def source_dataset(s3_bucket, new_s3_key):
     # Converts response to json
     data = json.load(res)
 
+    asset_lists = {}
+
     # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
     if data['result'] == 1:
 
         # Iterates through the meta data, fetches data and saves a json file based on params in the meta data
         for meta in data['epidata']:
-            query_and_save_api(meta)
+            s3_path = query_and_save_api(meta, s3_bucket, new_s3_key)
+
+            asset_list = [{'Bucket': s3_bucket, 'Key': new_s3_key + 'jsonl/' + s3_path +
+                           '.jsonl'}, {'Bucket': s3_bucket, 'Key': new_s3_key + 'csv/' + s3_path + '.csv'}]
+
+            if meta['data_source'] not in asset_lists:
+                asset_lists[meta['data_source']] = asset_list
+
+            else:
+                asset_lists[meta['data_source']
+                            ] = asset_lists[meta['data_source']] + asset_list
         
         # Saves meta data to json and csv file
-        print('Saving covidcast-meta')
 
         with open('/tmp/csv~covidcast_meta.csv', 'w', encoding='utf-8') as c:
             writer = csv.DictWriter(c, fieldnames=data['epidata'][0])
@@ -102,31 +124,20 @@ def source_dataset(s3_bucket, new_s3_key):
         with open('/tmp/jsonl~covidcast_meta.jsonl', 'w', encoding='utf-8') as j:
             for datum in data['epidata']:
                 j.write(json.dumps(datum) + '\n')
-
-        s3 = boto3.resource('s3')
-        bucket = s3.Bucket(s3_bucket)
-        bucket.objects.filter(Prefix=new_s3_key).delete()
-
-        asset_list = {'csv': [], "jsonl": []}
-
-        # Creates S3 connection
+        
         s3 = boto3.client('s3')
-
-        # Looping through filenames, uploading to S3
+        
         for filename in os.listdir('/tmp'):
-            print('Uploading ' + filename)
-            
             s3.upload_file('/tmp/' + filename, s3_bucket,
-                           new_s3_key + filename.replace('~', '/'))
+                        new_s3_key + filename.replace('~', '/'))
+            os.remove('/tmp/' + filename)
+        
+        print('Uploaded covidcast-meta')
 
-            if filename.startswith('jsonl'):
-                asset_list['jsonl'].append(
-                    {'Bucket': s3_bucket, 'Key': new_s3_key + filename.replace('~', '/')})
-            else:
-                asset_list['csv'].append(
-                    {'Bucket': s3_bucket, 'Key': new_s3_key + filename.replace('~', '/')})
+        asset_lists['meta'] = [{'Bucket': s3_bucket, 'Key': new_s3_key + 'jsonl/covidcast_meta.jsonl'}, {
+            'Bucket': s3_bucket, 'Key': new_s3_key + 'csv/covidcast_meta.csv'}]
                 
-        return asset_list
+        return asset_lists
 
     else:
         print('Failed to fetch covidcast_meta data')
