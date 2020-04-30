@@ -1,6 +1,6 @@
 # COVIDcast (COVID-19) Epidemiological Data | Delphi Research Group (CMU)
 
-The source code outlining how this product gathers, transforms, revises and publishes its datasets is avaiable at [https://github.com/rearc-data/delphi-covidcast-covid-19](https://github.com/rearc-data/delphi-covidcast-covid-19).
+The source code outlining how this product gathers, transforms, revises and publishes its datasets is available at [https://github.com/rearc-data/delphi-covidcast-covid-19](https://github.com/rearc-data/delphi-covidcast-covid-19).
 
 ## Product Description
 This resource contains an archived collection of datasets from Carnegie Mellon University Delphi Research Group's COVID-19 Surveillance Streams Data (COVIDcast) - itself an endpoint in Delphi's Epidata open API for Epidemiological Data.
