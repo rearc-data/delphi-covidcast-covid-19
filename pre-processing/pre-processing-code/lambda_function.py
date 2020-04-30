@@ -69,7 +69,7 @@ def start_change_set(describe_entity_response, revision_arn):
 
 
 def lambda_handler(event, context):
-	asset_lists = source_dataset(s3_bucket, new_s3_key)
+	asset_lists = source_dataset()
 
 	create_revision_response = dataexchange.create_revision(DataSetId=data_set_id)
 	revision_id = create_revision_response['Id']

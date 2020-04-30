@@ -62,7 +62,7 @@ Resources:
             - - Fn::Sub: ${DataSetName}
               - '/automation/pre-processing-code.zip'
       Handler: "lambda_function.lambda_handler"
-      MemorySize: 1028
+      MemorySize: 2056
       Timeout: 900
       Role:
         Fn::GetAtt:
