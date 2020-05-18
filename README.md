@@ -6,7 +6,7 @@
 
 You can subscribe to the AWS Data Exchange product utilizing the automation featured in this repository by visiting [https://aws.amazon.com/marketplace/pp/prodview-uusmw5j7egnck](https://aws.amazon.com/marketplace/pp/prodview-uusmw5j7egnck). 
 
-## Product Description
+## Main Overview
 This resource contains an archived collection of datasets from Carnegie Mellon University Delphi Research Group's COVID-19 Surveillance Streams Data (COVIDcast) - itself an endpoint in Delphi's Epidata open API for Epidemiological Data.
 
 Delphi's COVIDcast datasets are based on a variety of data sources including **a CMU-run Facebook health survey, a Google-run health survey, lab test results provided by Quidel Inc, search data released by Google Health Trends, and outpatient doctor visits provided by a national health system**.

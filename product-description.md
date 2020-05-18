@@ -2,7 +2,7 @@
 
 The source code outlining how this product gathers, transforms, revises and publishes its datasets is available at [https://github.com/rearc-data/delphi-covidcast-covid-19](https://github.com/rearc-data/delphi-covidcast-covid-19).
 
-## Product Description
+## Main Overview
 This resource contains an archived collection of datasets from Carnegie Mellon University Delphi Research Group's COVID-19 Surveillance Streams Data (COVIDcast) - itself an endpoint in Delphi's Epidata open API for Epidemiological Data.
 
 Delphi's COVIDcast datasets are based on a variety of data sources including **a CMU-run Facebook health survey, a Google-run health survey, lab test results provided by Quidel Inc, search data released by Google Health Trends, and outpatient doctor visits provided by a national health system**.
