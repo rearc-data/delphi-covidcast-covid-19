@@ -4,6 +4,7 @@ from source_data import source_dataset
 import boto3
 import os
 from datetime import date, datetime
+import math
 
 os.environ['AWS_DATA_PATH'] = '/opt/'
 
@@ -69,17 +70,26 @@ def start_change_set(describe_entity_response, revision_arn):
 
 
 def lambda_handler(event, context):
-	asset_lists = source_dataset()
+	asset_list = source_dataset()
 
-	if type(asset_lists) == dict:
+	if type(asset_list) == list:
 
 		create_revision_response = dataexchange.create_revision(DataSetId=data_set_id)
 		revision_id = create_revision_response['Id']
 		revision_arn = create_revision_response['Arn']
 
-		for key in asset_lists:
+		print('Total assets to be uploaded', len(asset_list))
+
+		start_index = 0
+		total_jobs = math.floor(len(asset_list) / 100) + 1
+
+		while(start_index < len(asset_list)):
+
 			# Used to store the Ids of the Jobs importing the assets to S3.
 			job_ids = set()
+
+			end_index = len(asset_list) if len(asset_list) - \
+                            start_index < 100 else start_index + 100
 
 			import_job = dataexchange.create_job(
 				Type='IMPORT_ASSETS_FROM_S3',
@@ -87,7 +97,7 @@ def lambda_handler(event, context):
 					'ImportAssetsFromS3': {
 						'DataSetId': data_set_id,
 						'RevisionId': revision_id,
-						'AssetSources': asset_lists[key]
+						'AssetSources': asset_list[start_index:end_index]
 					}
 				}
 			)
@@ -105,7 +115,8 @@ def lambda_handler(event, context):
 						continue
 					get_job_response = dataexchange.get_job(JobId=job_id)
 					if get_job_response['State'] == 'COMPLETED':
-						print('Job {} for {} completed'.format(job_id, key))
+						print('JobId: {}, Job {} of {} completed'.format(
+							job_id, math.floor(start_index/100) + 1, total_jobs))
 						completed_jobs.add(job_id)
 					if get_job_response['State'] == 'ERROR':
 						job_errors = get_job_response['Errors']
@@ -113,6 +124,8 @@ def lambda_handler(event, context):
 							'JobId: {} failed with errors:\n{}'.format(job_id, job_errors))
 					# Sleep to ensure we don't get throttled by the GetJob API.
 					time.sleep(0.2)
+			
+			start_index = start_index + 100
 
 		update_revision_response = dataexchange.update_revision(
 			DataSetId=data_set_id, RevisionId=revision_id, Comment=revision_comment, Finalized=True)

@@ -77,24 +77,38 @@ def query_and_save_api(meta):
 			start = start + timedelta(days=days_pre_step)
 			step = step + timedelta(days=days_pre_step)
 
+	jsonl_location = '/tmp/jsonl~' + filename + '.jsonl'
+	csv_location = '/tmp/csv~' + filename + '.csv'
+
+	# saves data to jsonl file
+	with open(jsonl_location, 'w', encoding='utf-8') as j:
+		j.write('\n'.join(json.dumps(datum) for datum in complete_data))
+
 	# saves data to csv file
-	with open('/tmp/csv~' + filename + '.csv', 'w', encoding='utf-8') as c:
+	with open(csv_location, 'w', encoding='utf-8') as c:
 		writer = csv.DictWriter(c, fieldnames=complete_data[0])
 		writer.writeheader()
 		writer.writerows(complete_data)
 
-	# saves data to jsonl file
-	with open('/tmp/jsonl~' + filename + '.jsonl', 'w', encoding='utf-8') as j:
-		j.write('\n'.join(json.dumps(datum) for datum in complete_data))
-
 	# uploads csv and jsonl to s3 and delete from local device
 	s3 = boto3.client('s3')
-	s3.upload_file('/tmp/jsonl~' + filename + '.jsonl', s3_bucket, new_s3_key + 'jsonl/' + filename.replace('~', '/') + '.jsonl')
-	os.remove('/tmp/jsonl~' + filename + '.jsonl')
-	s3.upload_file('/tmp/csv~' + filename + '.csv', s3_bucket, new_s3_key + 'csv/' + filename.replace('~', '/') + '.csv')
-	os.remove('/tmp/csv~' + filename + '.csv')
+
+	complete_jsonl_key = new_s3_key + 'jsonl/' + \
+		filename.replace('~', '/') + '.jsonl'
+	
+	complete_csv_key = new_s3_key + 'csv/' + filename.replace('~', '/') + '.csv'
+
+	s3.upload_file(jsonl_location, s3_bucket, complete_jsonl_key)
+	os.remove(jsonl_location)
+	s3.upload_file(csv_location, s3_bucket, complete_csv_key)
+	os.remove(csv_location)
 
 	print('Uploaded ' + filename)
+
+	return [
+		{'Bucket': s3_bucket, 'Key': complete_jsonl_key},
+		{'Bucket': s3_bucket, 'Key': complete_csv_key}
+	]
 
 def source_dataset():
 
@@ -118,31 +132,15 @@ def source_dataset():
 		# Converts response to json
 		data = json.load(res)
 
-		# asset_lists is used to exec jobs for the adx product revision in lambda_handler
-		asset_lists = {}
-
 		# In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
 		if data['result'] == 1:
-
-			# Iterates through the meta data to organize the asset_lists dict to be
-			# returned at end of func
-			for meta in data['epidata']:
-				s3_path = meta['data_source'] + '/' + meta['signal'] + '/' + meta['time_type'] + '/' + meta['geo_type']
-
-				asset_list = [{'Bucket': s3_bucket, 'Key': new_s3_key + 'jsonl/' + s3_path +
-							'.jsonl'}, {'Bucket': s3_bucket, 'Key': new_s3_key + 'csv/' + s3_path + '.csv'}]
-
-				if meta['data_source'] not in asset_lists:
-					asset_lists[meta['data_source']] = asset_list
-
-				else:
-					asset_lists[meta['data_source']
-								] = asset_lists[meta['data_source']] + asset_list
 
 			# mutlithreading to run multiple requests to the covidcast api enpoint
 			# in parallel to each other
 			with Pool(150) as p:
-				p.map(query_and_save_api, data['epidata'])
+				asset_lists = p.map(query_and_save_api, data['epidata'])
+			
+			flat_list = [asset for asset_list in asset_lists for asset in asset_list]
 
 			# Saves meta data to csv file
 			with open('/tmp/csv~covidcast_meta.csv', 'w', encoding='utf-8') as c:
@@ -159,14 +157,13 @@ def source_dataset():
 			# uploads meta files
 			for filename in os.listdir('/tmp'):
 				if '~covidcast_meta' in filename:
-					s3.upload_file('/tmp/' + filename, s3_bucket,
-								new_s3_key + filename.replace('~', '/'))
+					complete_key = new_s3_key + filename.replace('~', '/')
+
+					s3.upload_file('/tmp/' + filename, s3_bucket, complete_key)
 					os.remove('/tmp/' + filename)
+
+					flat_list.append({'Bucket': s3_bucket, 'Key': complete_key})
 			
 			print('Uploaded covidcast-meta')
 
-			# adds meta files to asset_lists dict
-			asset_lists['meta'] = [{'Bucket': s3_bucket, 'Key': new_s3_key + 'jsonl/covidcast_meta.jsonl'}, {
-				'Bucket': s3_bucket, 'Key': new_s3_key + 'csv/covidcast_meta.csv'}]
-
-			return asset_lists
+			return flat_list
