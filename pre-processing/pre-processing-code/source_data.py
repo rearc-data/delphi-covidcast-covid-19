@@ -2,8 +2,8 @@ import json
 import csv
 from datetime import date, timedelta, datetime
 import boto3
-import botocore
 import os
+import time
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 from multiprocessing.dummy import Pool
@@ -47,35 +47,48 @@ def query_and_save_api(meta):
 
 	while start <= end:
 
-		url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast&data_source=' + data_source + '&signal=' + signal + '&time_type=' + \
+		source_dataset_url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast&data_source=' + data_source + '&signal=' + signal + '&time_type=' + \
 			time_type + '&geo_type=' + geo_type + '&time_values=' + \
 			start.strftime('%Y%m%d') + '-' + \
 			step.strftime('%Y%m%d') + '&geo_value=*'
 		
 		# Response to Delphi API
 
-		try:
-			res = urlopen(url)
-		except HTTPError as e:
-			raise Exception('HTTPError: ', e.code, url)
-		except URLError as e:
-			raise Exception('URLError: ', e.reason, url)
-		else:
-		
-			# Convering response to json
-			data = json.load(res)
 
-			# In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned 
-			if data['result'] == 1:
-				complete_data = complete_data + data['epidata']
-							
+		response = None
+
+		retries = 5
+		for attempt in range(retries):
+
+			try:
+				response = urlopen(source_dataset_url)
+			except HTTPError as e:
+				if attempt == retries:
+					raise Exception('HTTPError: ', e.code, source_dataset_url)
+				time.sleep(0.2 * attempt)
+
+			except URLError as e:
+				if attempt == retries:
+					raise Exception('URLError: ', e.reason, source_dataset_url)
+				time.sleep(0.2 * attempt)
 			else:
-				print(data['result'], 'Failed to fetch ' + filename +
-						' from ' + start.strftime('%Y%m%d') + ' to ' + step.strftime('%Y%m%d'))
-			
-			# Increments the date range by the `days_pre_step` value
-			start = start + timedelta(days=days_pre_step)
-			step = step + timedelta(days=days_pre_step)
+				break
+
+		
+		# Convering response to json
+		data = json.load(response)
+
+		# In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned 
+		if data['result'] == 1:
+			complete_data = complete_data + data['epidata']
+						
+		else:
+			print(data['result'], 'Failed to fetch ' + filename +
+					' from ' + start.strftime('%Y%m%d') + ' to ' + step.strftime('%Y%m%d'))
+		
+		# Increments the date range by the `days_pre_step` value
+		start = start + timedelta(days=days_pre_step)
+		step = step + timedelta(days=days_pre_step)
 
 	jsonl_location = '/tmp/jsonl~' + filename + '.jsonl'
 	csv_location = '/tmp/csv~' + filename + '.csv'
@@ -113,52 +126,62 @@ def query_and_save_api(meta):
 def source_dataset():
 
 	# Response from covidcast_meta enpoint in Delphi API
-	try:
-		res = urlopen('https://delphi.cmu.edu/epidata/api.php?source=covidcast_meta')
 
-	except HTTPError as e:
-		raise Exception('HTTPError: ', e.code, 'meta')
+	meta_url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast_meta'
+	response = None
 
-	except URLError as e:
-		raise Exception('URLError: ', e.reason, 'meta')
+	retries = 5
+	for attempt in range(retries):
 
-	else:
-	
-		# Converts response to json
-		data = json.load(res)
+		try:
+			response = urlopen(meta_url)
+		except HTTPError as e:
+			if attempt == retries:
+				raise Exception('HTTPError: ', e.code, meta_url)
+			time.sleep(0.2 * attempt)
 
-		# In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
-		if data['result'] == 1:
+		except URLError as e:
+			if attempt == retries:
+				raise Exception('URLError: ', e.reason, meta_url)
+			time.sleep(0.2 * attempt)
+		else:
+			break
 
-			# mutlithreading to run multiple requests to the covidcast api enpoint
-			# in parallel to each other
-			with Pool(150) as p:
-				asset_lists = p.map(query_and_save_api, data['epidata'])
-			
-			flat_list = [asset for asset_list in asset_lists for asset in asset_list]
+	# Converts response to json
+	data = json.load(response)
 
-			# Saves meta data to csv file
-			with open('/tmp/csv~covidcast_meta.csv', 'w', encoding='utf-8') as c:
-				writer = csv.DictWriter(c, fieldnames=data['epidata'][0])
-				writer.writeheader()
-				writer.writerows(data['epidata'])
+	# In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
+	if data['result'] == 1:
 
-			# Saves meta data to jsonl file
-			with open('/tmp/jsonl~covidcast_meta.jsonl', 'w', encoding='utf-8') as j:
-				j.write('\n'.join(json.dumps(datum) for datum in data['epidata']))
-			
-			s3 = boto3.client('s3')
-			
-			# uploads meta files
-			for filename in os.listdir('/tmp'):
-				if '~covidcast_meta' in filename:
-					complete_key = new_s3_key + filename.replace('~', '/')
+		# mutlithreading to run multiple requests to the covidcast api enpoint
+		# in parallel to each other
+		with Pool(150) as p:
+			asset_lists = p.map(query_and_save_api, data['epidata'])
+		
+		flat_list = [asset for asset_list in asset_lists for asset in asset_list]
 
-					s3.upload_file('/tmp/' + filename, s3_bucket, complete_key)
-					os.remove('/tmp/' + filename)
+		# Saves meta data to csv file
+		with open('/tmp/csv~covidcast_meta.csv', 'w', encoding='utf-8') as c:
+			writer = csv.DictWriter(c, fieldnames=data['epidata'][0])
+			writer.writeheader()
+			writer.writerows(data['epidata'])
 
-					flat_list.append({'Bucket': s3_bucket, 'Key': complete_key})
-			
-			print('Uploaded covidcast-meta')
+		# Saves meta data to jsonl file
+		with open('/tmp/jsonl~covidcast_meta.jsonl', 'w', encoding='utf-8') as j:
+			j.write('\n'.join(json.dumps(datum) for datum in data['epidata']))
+		
+		s3 = boto3.client('s3')
+		
+		# uploads meta files
+		for filename in os.listdir('/tmp'):
+			if '~covidcast_meta' in filename:
+				complete_key = new_s3_key + filename.replace('~', '/')
 
-			return flat_list
+				s3.upload_file('/tmp/' + filename, s3_bucket, complete_key)
+				os.remove('/tmp/' + filename)
+
+				flat_list.append({'Bucket': s3_bucket, 'Key': complete_key})
+		
+		print('Uploaded covidcast-meta')
+
+		return flat_list
