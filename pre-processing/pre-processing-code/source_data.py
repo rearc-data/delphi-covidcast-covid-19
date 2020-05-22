@@ -112,11 +112,6 @@ def query_and_save_api(meta):
 
 def source_dataset():
 
-	# deletes previous datasets from rearc's internal covidcast bucket 
-	s3 = boto3.resource('s3')
-	bucket = s3.Bucket(s3_bucket)
-	bucket.objects.filter(Prefix=new_s3_key).delete()
-
 	# Response from covidcast_meta enpoint in Delphi API
 	try:
 		res = urlopen('https://delphi.cmu.edu/epidata/api.php?source=covidcast_meta')
