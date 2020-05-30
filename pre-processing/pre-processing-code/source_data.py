@@ -155,7 +155,7 @@ def source_dataset():
 
 		# mutlithreading to run multiple requests to the covidcast api enpoint
 		# in parallel to each other
-		with Pool(150) as p:
+		with Pool(10) as p:
 			asset_lists = p.map(query_and_save_api, data['epidata'])
 		
 		flat_list = [asset for asset_list in asset_lists for asset in asset_list]
