@@ -1,6 +1,6 @@
 import json
 import csv
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, timezone
 import boto3
 import os
 import time
@@ -11,6 +11,8 @@ from multiprocessing.dummy import Pool
 s3_bucket = os.environ['S3_BUCKET']
 data_set_name = os.environ['DATA_SET_NAME']
 new_s3_key = data_set_name + '/dataset/'
+
+s3 = boto3.client('s3')
 
 if not s3_bucket:
     raise Exception("'S3_BUCKET' environment variable must be defined!")
@@ -103,7 +105,6 @@ def query_and_save_api(meta):
         writer.writerows(complete_data)
 
     # uploads csv and jsonl to s3 and delete from local device
-    s3 = boto3.client('s3')
 
     complete_jsonl_key = new_s3_key + 'jsonl/' + \
         filename.replace('~', '/') + '.jsonl'
@@ -137,12 +138,12 @@ def source_dataset():
         try:
             response = urlopen(meta_url)
         except HTTPError as e:
-            if attempt == retries:
+            if attempt == retries - 1:
                 raise Exception('HTTPError: ', e.code, meta_url)
             time.sleep(0.2 * attempt)
 
         except URLError as e:
-            if attempt == retries:
+            if attempt == retries - 1:
                 raise Exception('URLError: ', e.reason, meta_url)
             time.sleep(0.2 * attempt)
         else:
@@ -154,10 +155,42 @@ def source_dataset():
     # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
     if data['result'] == 1:
 
+        objects = s3.list_objects_v2(
+            Bucket=s3_bucket, Prefix=('{}csv/'.format(new_s3_key)))
+
+        keys = {}
+
+        for obj in objects['Contents']:
+            key = obj['Key'].split(
+                '{}csv/'.format(new_s3_key), 1)[1].split('.csv', 1)[0]
+            keys[key] = obj['LastModified']
+
+        existing_meta = []
+        update_meta = []
+
+        for meta in data['epidata']:
+            if meta['data_source'] != 'safegraph':
+                last_updated = datetime.fromtimestamp(
+                    meta['last_update'], timezone.utc)
+                meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
+                                                meta['signal'], meta['time_type'], meta['geo_type'])
+
+                if meta_key in keys:
+                    if last_updated > keys[meta_key]:
+                        update_meta.append(meta)
+                    else:
+                        existing_meta = existing_meta + [{'Bucket': s3_bucket, 'Key': '{}csv/{}.csv'.format(
+                            new_s3_key, meta_key)}, {'Bucket': s3_bucket, 'Key': '{}jsonl/{}.jsonl'.format(new_s3_key, meta_key)}]
+                else:
+                    update_meta.append(meta)
+
+        if len(existing_meta) > 0 and len(update_meta) == 0:
+            return []
+
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
         with Pool(10) as p:
-            asset_lists = p.map(query_and_save_api, data['epidata'])
+            asset_lists = p.map(query_and_save_api, update_meta)
 
         flat_list = [
             asset for asset_list in asset_lists for asset in asset_list]
@@ -172,8 +205,6 @@ def source_dataset():
         with open('/tmp/jsonl~covidcast_meta.jsonl', 'w', encoding='utf-8') as j:
             j.write('\n'.join(json.dumps(datum) for datum in data['epidata']))
 
-        s3 = boto3.client('s3')
-
         # uploads meta files
         for filename in os.listdir('/tmp'):
             if '~covidcast_meta' in filename:
@@ -186,4 +217,4 @@ def source_dataset():
 
         print('Uploaded covidcast-meta')
 
-        return flat_list
+        return flat_list + existing_meta

@@ -85,7 +85,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "ScheduledRule"
-      ScheduleExpression: "cron(0 2 * * ? *)"
+      ScheduleExpression: "cron(0 2,6,10,14,18,22 * * ? *)"
       State: "ENABLED"
       Targets:
         -
