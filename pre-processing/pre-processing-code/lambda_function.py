@@ -75,6 +75,8 @@ def lambda_handler(event, context):
     if type(asset_list) == list:
 
         if len(asset_list) == 0:
+            print(
+                'No need for a revision, all datasets included with this product are current')
             return {
                 'statusCode': 200,
                 'body': json.dumps('No need for a revision, all datasets included with this product are current')
@@ -149,16 +151,19 @@ def lambda_handler(event, context):
             start_change_set_response = start_change_set(
                 describe_entity_response, revision_arn)
             if start_change_set_response['ChangeSetId']:
+                print('Revision updated successfully and added to the dataset')
                 return {
                     'statusCode': 200,
                     'body': json.dumps('Revision updated successfully and added to the dataset')
                 }
             else:
+                print('Something went wrong with AWSMarketplace Catalog API')
                 return {
                     'statusCode': 500,
                     'body': json.dumps('Something went wrong with AWSMarketplace Catalog API')
                 }
         else:
+            print('Revision did not complete successfully')
             return {
                 'statusCode': 500,
                 'body': json.dumps('Revision did not complete successfully')
