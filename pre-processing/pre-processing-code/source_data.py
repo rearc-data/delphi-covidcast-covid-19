@@ -12,8 +12,6 @@ s3_bucket = os.environ['S3_BUCKET']
 data_set_name = os.environ['DATA_SET_NAME']
 new_s3_key = data_set_name + '/dataset/'
 
-s3 = boto3.client('s3')
-
 if not s3_bucket:
     raise Exception("'S3_BUCKET' environment variable must be defined!")
 
@@ -112,6 +110,8 @@ def query_and_save_api(meta):
     complete_csv_key = new_s3_key + 'csv/' + \
         filename.replace('~', '/') + '.csv'
 
+    s3 = boto3.client('s3')
+
     s3.upload_file(jsonl_location, s3_bucket, complete_jsonl_key)
     os.remove(jsonl_location)
     s3.upload_file(csv_location, s3_bucket, complete_csv_key)
@@ -155,6 +155,8 @@ def source_dataset():
     # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
     if data['result'] == 1:
 
+        s3 = boto3.client('s3')
+
         objects = s3.list_objects_v2(
             Bucket=s3_bucket, Prefix=('{}csv/'.format(new_s3_key)))
 
@@ -189,7 +191,7 @@ def source_dataset():
 
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
-        with Pool(10) as p:
+        with Pool(8) as p:
             asset_lists = p.map(query_and_save_api, update_meta)
 
         flat_list = [
@@ -206,6 +208,9 @@ def source_dataset():
             j.write('\n'.join(json.dumps(datum) for datum in data['epidata']))
 
         # uploads meta files
+
+        s3 = boto3.client('s3')
+
         for filename in os.listdir('/tmp'):
             if '~covidcast_meta' in filename:
                 complete_key = new_s3_key + filename.replace('~', '/')
