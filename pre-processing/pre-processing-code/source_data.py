@@ -171,20 +171,19 @@ def source_dataset():
         update_meta = []
 
         for meta in data['epidata']:
-            if meta['data_source'] != 'safegraph':
-                last_updated = datetime.fromtimestamp(
-                    meta['last_update'], timezone.utc)
-                meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
-                                                meta['signal'], meta['time_type'], meta['geo_type'])
+            last_updated = datetime.fromtimestamp(
+                meta['last_update'], timezone.utc)
+            meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
+                                            meta['signal'], meta['time_type'], meta['geo_type'])
 
-                if meta_key in keys:
-                    if last_updated > keys[meta_key]:
-                        update_meta.append(meta)
-                    else:
-                        existing_meta = existing_meta + [{'Bucket': s3_bucket, 'Key': '{}csv/{}.csv'.format(
-                            new_s3_key, meta_key)}, {'Bucket': s3_bucket, 'Key': '{}jsonl/{}.jsonl'.format(new_s3_key, meta_key)}]
-                else:
+            if meta_key in keys:
+                if last_updated > keys[meta_key]:
                     update_meta.append(meta)
+                else:
+                    existing_meta = existing_meta + [{'Bucket': s3_bucket, 'Key': '{}csv/{}.csv'.format(
+                        new_s3_key, meta_key)}, {'Bucket': s3_bucket, 'Key': '{}jsonl/{}.jsonl'.format(new_s3_key, meta_key)}]
+            else:
+                update_meta.append(meta)
 
         if len(existing_meta) > 0 and len(update_meta) == 0:
             return []
