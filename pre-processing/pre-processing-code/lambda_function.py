@@ -170,3 +170,6 @@ def lambda_handler(event, context):
             }
     else:
         raise Exception('Something went wrong when uploading files to s3')
+
+if __name__ == "__main__":
+    lambda_handler(None, None)

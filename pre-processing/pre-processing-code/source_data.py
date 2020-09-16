@@ -44,7 +44,8 @@ def query_and_save_api(meta):
 
     # Loop only while the date assigned to `start` is eariler or the same as the date assigned to `end`
 
-    complete_data = []
+    jsonl_location = '/tmp/jsonl~' + filename + '.jsonl'
+    csv_location = '/tmp/csv~' + filename + '.csv'
 
     while start <= end:
 
@@ -79,7 +80,21 @@ def query_and_save_api(meta):
 
         # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
         if data['result'] == 1:
-            complete_data = complete_data + data['epidata']
+            # saves data to jsonl file
+            with open(jsonl_location, 'a', encoding='utf-8') as j:
+                j.write('\n'.join(json.dumps(datum) for datum in data['epidata']))
+                j.write('\n')
+
+            # saves data to csv file
+            if os.path.isfile(csv_location):
+                with open(csv_location, 'a', encoding='utf-8') as c:
+                    writer = csv.DictWriter(c, fieldnames=data['epidata'][0])
+                    writer.writerows(data['epidata'])
+            else:
+                with open(csv_location, 'w', encoding='utf-8') as c:
+                    writer = csv.DictWriter(c, fieldnames=data['epidata'][0])
+                    writer.writeheader()
+                    writer.writerows(data['epidata'])
 
         else:
             print(data['result'], 'Failed to fetch ' + filename +
@@ -88,19 +103,6 @@ def query_and_save_api(meta):
         # Increments the date range by the `days_pre_step` value
         start = start + timedelta(days=days_pre_step)
         step = step + timedelta(days=days_pre_step)
-
-    jsonl_location = '/tmp/jsonl~' + filename + '.jsonl'
-    csv_location = '/tmp/csv~' + filename + '.csv'
-
-    # saves data to jsonl file
-    with open(jsonl_location, 'w', encoding='utf-8') as j:
-        j.write('\n'.join(json.dumps(datum) for datum in complete_data))
-
-    # saves data to csv file
-    with open(csv_location, 'w', encoding='utf-8') as c:
-        writer = csv.DictWriter(c, fieldnames=complete_data[0])
-        writer.writeheader()
-        writer.writerows(complete_data)
 
     # uploads csv and jsonl to s3 and delete from local device
 
