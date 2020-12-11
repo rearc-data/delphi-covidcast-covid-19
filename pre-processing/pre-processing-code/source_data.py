@@ -7,6 +7,7 @@ import time
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 from multiprocessing.dummy import Pool
+from io import StringIO
 
 s3_bucket = os.environ['S3_BUCKET']
 data_set_name = os.environ['DATA_SET_NAME']
@@ -89,33 +90,27 @@ def query_and_save_api(meta):
         start = start + timedelta(days=days_pre_step)
         step = step + timedelta(days=days_pre_step)
 
-    jsonl_location = '/tmp/jsonl~' + filename + '.jsonl'
-    csv_location = '/tmp/csv~' + filename + '.csv'
-
-    # saves data to jsonl file
-    with open(jsonl_location, 'w', encoding='utf-8') as j:
-        j.write('\n'.join(json.dumps(datum) for datum in complete_data))
-
-    # saves data to csv file
-    with open(csv_location, 'w', encoding='utf-8') as c:
-        writer = csv.DictWriter(c, fieldnames=complete_data[0])
-        writer.writeheader()
-        writer.writerows(complete_data)
-
-    # uploads csv and jsonl to s3 and delete from local device
+    s3 = boto3.client('s3')
 
     complete_jsonl_key = new_s3_key + 'jsonl/' + \
         filename.replace('~', '/') + '.jsonl'
+    jsonl_encode = '\n'.join(json.dumps(datum)
+                             for datum in complete_data).encode()
+    s3.put_object(Body=jsonl_encode, Bucket=s3_bucket, Key=complete_jsonl_key)
+    jsonl_encode = None
 
     complete_csv_key = new_s3_key + 'csv/' + \
         filename.replace('~', '/') + '.csv'
+    csv_encode = StringIO()
+    writer = csv.DictWriter(csv_encode, fieldnames=complete_data[0])
+    writer.writeheader()
+    writer.writerows(complete_data)
+    complete_data = None
+    csv_encode = csv_encode.getvalue().encode()
 
-    s3 = boto3.client('s3')
+    s3.put_object(Body=csv_encode, Bucket=s3_bucket, Key=complete_csv_key)
 
-    s3.upload_file(jsonl_location, s3_bucket, complete_jsonl_key)
-    os.remove(jsonl_location)
-    s3.upload_file(csv_location, s3_bucket, complete_csv_key)
-    os.remove(csv_location)
+    csv_encode = None
 
     print('Uploaded ' + filename)
 
@@ -192,34 +187,32 @@ def source_dataset():
 
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
-        with Pool(16) as p:
+        with Pool(10) as p:
             asset_lists = p.map(query_and_save_api, update_meta)
 
         flat_list = [
             asset for asset_list in asset_lists for asset in asset_list]
 
-        # Saves meta data to csv file
-        with open('/tmp/csv~covidcast_meta.csv', 'w', encoding='utf-8') as c:
-            writer = csv.DictWriter(c, fieldnames=data['epidata'][0])
-            writer.writeheader()
-            writer.writerows(data['epidata'])
-
-        # Saves meta data to jsonl file
-        with open('/tmp/jsonl~covidcast_meta.jsonl', 'w', encoding='utf-8') as j:
-            j.write('\n'.join(json.dumps(datum) for datum in data['epidata']))
-
-        # uploads meta files
+        asset_lists = None
 
         s3 = boto3.client('s3')
 
-        for filename in os.listdir('/tmp'):
-            if '~covidcast_meta' in filename:
-                complete_key = new_s3_key + filename.replace('~', '/')
+        jsonl_key = new_s3_key + 'jsonl/covidcast_meta.jsonl'
+        jsonl_encode = '\n'.join(json.dumps(datum)
+                                 for datum in data['epidata']).encode()
+        s3.put_object(Body=jsonl_encode, Bucket=s3_bucket, Key=jsonl_key)
+        jsonl_encode = None
+        flat_list.append({'Bucket': s3_bucket, 'Key': jsonl_key})
 
-                s3.upload_file('/tmp/' + filename, s3_bucket, complete_key)
-                os.remove('/tmp/' + filename)
-
-                flat_list.append({'Bucket': s3_bucket, 'Key': complete_key})
+        csv_key = new_s3_key + 'csv/covidcast_meta.csv'
+        csv_encode = StringIO()
+        writer = csv.DictWriter(csv_encode, fieldnames=data['epidata'][0])
+        writer.writeheader()
+        writer.writerows(data['epidata'])
+        data = None
+        csv_encode = csv_encode.getvalue().encode()
+        s3.put_object(Body=csv_encode, Bucket=s3_bucket, Key=csv_key)
+        csv_encode = None
 
         print('Uploaded covidcast-meta')
 
