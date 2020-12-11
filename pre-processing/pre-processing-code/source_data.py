@@ -162,10 +162,11 @@ def source_dataset():
 
         keys = {}
 
-        for obj in objects['Contents']:
-            key = obj['Key'].split(
-                '{}csv/'.format(new_s3_key), 1)[1].split('.csv', 1)[0]
-            keys[key] = obj['LastModified']
+        if 'Contents' in objects:
+            for obj in objects['Contents']:
+                key = obj['Key'].split(
+                    '{}csv/'.format(new_s3_key), 1)[1].split('.csv', 1)[0]
+                keys[key] = obj['LastModified']
 
         existing_meta = []
         update_meta = []
