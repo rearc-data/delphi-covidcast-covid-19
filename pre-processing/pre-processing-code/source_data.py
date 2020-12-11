@@ -190,7 +190,7 @@ def source_dataset():
 
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
-        with Pool(8) as p:
+        with Pool(16) as p:
             asset_lists = p.map(query_and_save_api, update_meta)
 
         flat_list = [
