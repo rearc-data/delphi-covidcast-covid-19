@@ -7,15 +7,16 @@ from datetime import date, datetime
 import math
 
 os.environ['AWS_DATA_PATH'] = '/opt/'
+region = os.environ['REGION']
 
 dataexchange = boto3.client(
     service_name='dataexchange',
-    region_name=os.environ['REGION']
+    region_name=region
 )
 
 marketplace = boto3.client(
     service_name='marketplace-catalog',
-    region_name=os.environ['REGION']
+    region_name=region
 )
 
 s3_bucket = os.environ['S3_BUCKET']

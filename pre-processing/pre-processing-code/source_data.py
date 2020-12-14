@@ -10,6 +10,8 @@ from multiprocessing.dummy import Pool
 from io import StringIO
 
 s3_bucket = os.environ['S3_BUCKET']
+data_set_arn = os.environ['DATA_SET_ARN']
+data_set_id = data_set_arn.split('/', 1)[1]
 data_set_name = os.environ['DATA_SET_NAME']
 new_s3_key = data_set_name + '/dataset/'
 
@@ -18,6 +20,8 @@ if not s3_bucket:
 
 if not new_s3_key:
     raise Exception("'DATA_SET_NAME' environment variable must be defined!")
+
+s3 = boto3.client('s3')
 
 
 def query_and_save_api(meta):
@@ -35,27 +39,37 @@ def query_and_save_api(meta):
     filename = data_source + '~' + signal + '~' + time_type + '~' + geo_type
 
     # Delphi COVIDcast has a max limit of 3650 rows returned per API call
-    # `days_pre_step` calculates the max num of days that can be requested per call
-    days_pre_step = int(3650 / num_locations)
+    # `time_pre_step` calculates the max num of days that can be requested per call
+    time_pre_step = int(3650 / num_locations)
 
     # Constructs date variables to be used to keep track of incrementing date windows
-    start = datetime.strptime(min_time, '%Y%m%d')
-    step = start + timedelta(days=(days_pre_step - 1))
-    end = datetime.strptime(max_time, '%Y%m%d')
-
+    if len(min_time) == 8 and time_type == 'day':
+        start = datetime.strptime(min_time, '%Y%m%d')
+        step = start + timedelta(days=(time_pre_step - 1))
+        end = datetime.strptime(max_time, '%Y%m%d')
+    elif len(min_time) == 6 and time_type == 'week':
+        start = datetime.strptime(min_time + '1', '%G%V%u')
+        step = start + timedelta(weeks=(time_pre_step - 1))
+        end = datetime.strptime(max_time + '1', '%G%V%u')
     # Loop only while the date assigned to `start` is eariler or the same as the date assigned to `end`
 
     complete_data = []
 
     while start <= end:
 
+        if len(min_time) == 8 and time_type == 'day':
+            current_start = start.strftime('%Y%m%d')
+            current_end = step.strftime('%Y%m%d')
+        elif len(min_time) == 6 and time_type == 'week':
+            current_start = start.strftime('%G%V')
+            current_end = step.strftime('%G%V')
+
         source_dataset_url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast&data_source=' + data_source + '&signal=' + signal + '&time_type=' + \
             time_type + '&geo_type=' + geo_type + '&time_values=' + \
-            start.strftime('%Y%m%d') + '-' + \
-            step.strftime('%Y%m%d') + '&geo_value=*'
+            current_start + '-' + \
+            current_end + '&geo_value=*'
 
         # Response to Delphi API
-
         response = None
 
         retries = 5
@@ -84,13 +98,15 @@ def query_and_save_api(meta):
 
         else:
             print(data['result'], 'Failed to fetch ' + filename +
-                  ' from ' + start.strftime('%Y%m%d') + ' to ' + step.strftime('%Y%m%d'))
+                  ' from ' + current_start + ' to ' + current_end)
 
-        # Increments the date range by the `days_pre_step` value
-        start = start + timedelta(days=days_pre_step)
-        step = step + timedelta(days=days_pre_step)
-
-    s3 = boto3.client('s3')
+        # Increments the date range by the `time_pre_step` value
+        if len(min_time) == 8 and time_type == 'day':
+            start = start + timedelta(days=time_pre_step)
+            step = step + timedelta(days=time_pre_step)
+        elif len(min_time) == 6 and time_type == 'week':
+            start = start + timedelta(weeks=time_pre_step)
+            step = step + timedelta(weeks=time_pre_step)
 
     complete_jsonl_key = new_s3_key + 'jsonl/' + \
         filename.replace('~', '/') + '.jsonl'
@@ -150,8 +166,6 @@ def source_dataset():
     # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
     if data['result'] == 1:
 
-        s3 = boto3.client('s3')
-
         objects = s3.list_objects_v2(
             Bucket=s3_bucket, Prefix=('{}csv/'.format(new_s3_key)))
 
@@ -167,35 +181,43 @@ def source_dataset():
         update_meta = []
 
         for meta in data['epidata']:
-            if meta['data_source'] != 'nchs-mortality':
-                last_updated = datetime.fromtimestamp(
-                    meta['last_update'], timezone.utc)
-                meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
-                                                meta['signal'], meta['time_type'], meta['geo_type'])
+            last_updated = datetime.fromtimestamp(
+                meta['last_update'], timezone.utc)
+            meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
+                                            meta['signal'], meta['time_type'], meta['geo_type'])
 
-                if meta_key in keys:
-                    if last_updated > keys[meta_key]:
-                        update_meta.append(meta)
-                    else:
-                        existing_meta = existing_meta + [{'Bucket': s3_bucket, 'Key': '{}csv/{}.csv'.format(
-                            new_s3_key, meta_key)}, {'Bucket': s3_bucket, 'Key': '{}jsonl/{}.jsonl'.format(new_s3_key, meta_key)}]
-                else:
+            if meta_key in keys:
+                if last_updated > keys[meta_key]:
                     update_meta.append(meta)
+                else:
+                    existing_meta = existing_meta + [{'Bucket': s3_bucket, 'Key': '{}csv/{}.csv'.format(
+                        new_s3_key, meta_key)}, {'Bucket': s3_bucket, 'Key': '{}jsonl/{}.jsonl'.format(new_s3_key, meta_key)}]
+            else:
+                update_meta.append(meta)
 
         if len(existing_meta) > 0 and len(update_meta) == 0:
-            return []
+            dataexchange = boto3.client(
+                service_name='dataexchange',
+                region_name=os.environ['REGION']
+            )
+            list_data_set_revisions = dataexchange.list_data_set_revisions(
+                DataSetId=data_set_id,
+                MaxResults=1
+            )
+            if list_data_set_revisions['Revisions'][0]['Finalized'] == False:
+                return existing_meta
+            else:
+                return []
 
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
-        with Pool(10) as p:
+        with Pool(8) as p:
             asset_lists = p.map(query_and_save_api, update_meta)
 
         flat_list = [
             asset for asset_list in asset_lists for asset in asset_list]
 
         asset_lists = None
-
-        s3 = boto3.client('s3')
 
         jsonl_key = new_s3_key + 'jsonl/covidcast_meta.jsonl'
         jsonl_encode = '\n'.join(json.dumps(datum)
