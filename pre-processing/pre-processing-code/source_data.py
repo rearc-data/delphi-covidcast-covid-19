@@ -37,6 +37,8 @@ def query_and_save_api(meta):
 
     # Constructs `filename` from data params
     filename = data_source + '~' + signal + '~' + time_type + '~' + geo_type
+    
+    print('Starting ' + filename)
 
     # Delphi COVIDcast has a max limit of 3650 rows returned per API call
     # `time_pre_step` calculates the max num of days that can be requested per call
@@ -208,7 +210,9 @@ def source_dataset():
                 return existing_meta
             else:
                 return []
-
+        
+        print('Files to be updated', update_meta)
+        
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
         with Pool(8) as p:
