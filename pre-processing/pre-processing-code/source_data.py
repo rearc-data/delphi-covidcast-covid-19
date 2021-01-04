@@ -24,6 +24,34 @@ if not new_s3_key:
 s3 = boto3.client('s3')
 
 
+def download_dataset(source_dataset_url):
+    data = None
+
+    retries = 5
+    for attempt in range(retries):
+        try:
+            data = urlopen(source_dataset_url)
+        except HTTPError as e:
+            if attempt == retries - 1:
+                raise Exception('HTTPError: ', e.code, source_dataset_url)
+            time.sleep(0.2 * attempt)
+
+        except URLError as e:
+            if attempt == retries - 1:
+                raise Exception('URLError: ', e.reason, source_dataset_url)
+            time.sleep(0.2 * attempt)
+        else:
+            break
+
+    data = json.load(data)
+
+    if data['result'] == 1:
+        return data['epidata']
+    else:
+        print(data['result'], 'Failed to fetch ' + source_dataset_url)
+        return []
+
+
 def query_and_save_api(meta):
 
     # Saving key terms from data to variables
@@ -37,7 +65,7 @@ def query_and_save_api(meta):
 
     # Constructs `filename` from data params
     filename = data_source + '~' + signal + '~' + time_type + '~' + geo_type
-    
+
     print('Starting ' + filename)
 
     # Delphi COVIDcast has a max limit of 3650 rows returned per API call
@@ -53,12 +81,11 @@ def query_and_save_api(meta):
         start = datetime.strptime(min_time + '1', '%G%V%u')
         step = start + timedelta(weeks=(time_pre_step - 1))
         end = datetime.strptime(max_time + '1', '%G%V%u')
+
+    source_urls = []
+
     # Loop only while the date assigned to `start` is eariler or the same as the date assigned to `end`
-
-    complete_data = []
-
     while start <= end:
-
         if len(min_time) == 8 and time_type == 'day':
             current_start = start.strftime('%Y%m%d')
             current_end = step.strftime('%Y%m%d')
@@ -66,41 +93,8 @@ def query_and_save_api(meta):
             current_start = start.strftime('%G%V')
             current_end = step.strftime('%G%V')
 
-        source_dataset_url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast&data_source=' + data_source + '&signal=' + signal + '&time_type=' + \
-            time_type + '&geo_type=' + geo_type + '&time_values=' + \
-            current_start + '-' + \
-            current_end + '&geo_value=*'
-
-        # Response to Delphi API
-        response = None
-
-        retries = 5
-        for attempt in range(retries):
-
-            try:
-                response = urlopen(source_dataset_url)
-            except HTTPError as e:
-                if attempt == retries - 1:
-                    raise Exception('HTTPError: ', e.code, source_dataset_url)
-                time.sleep(0.2 * attempt)
-
-            except URLError as e:
-                if attempt == retries - 1:
-                    raise Exception('URLError: ', e.reason, source_dataset_url)
-                time.sleep(0.2 * attempt)
-            else:
-                break
-
-        # Convering response to json
-        data = json.load(response)
-
-        # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
-        if data['result'] == 1:
-            complete_data = complete_data + data['epidata']
-
-        else:
-            print(data['result'], 'Failed to fetch ' + filename +
-                  ' from ' + current_start + ' to ' + current_end)
+        source_urls.append('https://delphi.cmu.edu/epidata/api.php?source=covidcast&data_source=' + data_source + '&signal=' + signal +
+                           '&time_type=' + time_type + '&geo_type=' + geo_type + '&time_values=' + current_start + '-' + current_end + '&geo_value=*')
 
         # Increments the date range by the `time_pre_step` value
         if len(min_time) == 8 and time_type == 'day':
@@ -109,6 +103,11 @@ def query_and_save_api(meta):
         elif len(min_time) == 6 and time_type == 'week':
             start = start + timedelta(weeks=time_pre_step)
             step = step + timedelta(weeks=time_pre_step)
+
+    with Pool(8) as p:
+        complete_data = p.map(download_dataset, source_urls)
+
+    complete_data = [datum for data in complete_data for datum in data]
 
     complete_jsonl_key = new_s3_key + 'jsonl/' + \
         filename.replace('~', '/') + '.jsonl'
@@ -141,15 +140,14 @@ def query_and_save_api(meta):
 def source_dataset():
 
     # Response from covidcast_meta enpoint in Delphi API
-
     meta_url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast_meta'
-    response = None
+    metadata = None
 
     retries = 5
     for attempt in range(retries):
 
         try:
-            response = urlopen(meta_url)
+            metadata = urlopen(meta_url)
         except HTTPError as e:
             if attempt == retries - 1:
                 raise Exception('HTTPError: ', e.code, meta_url)
@@ -163,10 +161,11 @@ def source_dataset():
             break
 
     # Converts response to json
-    data = json.load(response)
+    metadata = json.load(metadata)
 
     # In the Delphi API, the value of `1` under the `result` key means a valid set of data was returned
-    if data['result'] == 1:
+    if metadata['result'] == 1:
+        metadata = metadata['epidata']
 
         objects = s3.list_objects_v2(
             Bucket=s3_bucket, Prefix=('{}csv/'.format(new_s3_key)))
@@ -182,7 +181,7 @@ def source_dataset():
         existing_meta = []
         update_meta = []
 
-        for meta in data['epidata']:
+        for meta in metadata:
             last_updated = datetime.fromtimestamp(
                 meta['last_update'], timezone.utc)
             meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
@@ -210,36 +209,37 @@ def source_dataset():
                 return existing_meta
             else:
                 return []
-        
+
         print('Files to be updated', update_meta)
-        
+
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
-        with Pool(8) as p:
+        threads = 8
+        if all((meta['data_source'] == 'safegraph' and meta['geo_type'] == 'county') for meta in update_meta):
+            threads = 2
+        with Pool(threads) as p:
             asset_lists = p.map(query_and_save_api, update_meta)
 
-        flat_list = [
+        asset_lists = [
             asset for asset_list in asset_lists for asset in asset_list]
-
-        asset_lists = None
 
         jsonl_key = new_s3_key + 'jsonl/covidcast_meta.jsonl'
         jsonl_encode = '\n'.join(json.dumps(datum)
-                                 for datum in data['epidata']).encode()
+                                 for datum in metadata).encode()
         s3.put_object(Body=jsonl_encode, Bucket=s3_bucket, Key=jsonl_key)
         jsonl_encode = None
-        flat_list.append({'Bucket': s3_bucket, 'Key': jsonl_key})
+        asset_lists.append({'Bucket': s3_bucket, 'Key': jsonl_key})
 
         csv_key = new_s3_key + 'csv/covidcast_meta.csv'
         csv_encode = StringIO()
-        writer = csv.DictWriter(csv_encode, fieldnames=data['epidata'][0])
+        writer = csv.DictWriter(csv_encode, fieldnames=metadata[0])
         writer.writeheader()
-        writer.writerows(data['epidata'])
-        data = None
+        writer.writerows(metadata)
+        metadata = None
         csv_encode = csv_encode.getvalue().encode()
         s3.put_object(Body=csv_encode, Bucket=s3_bucket, Key=csv_key)
         csv_encode = None
 
         print('Uploaded covidcast-meta')
 
-        return flat_list + existing_meta
+        return asset_lists + existing_meta
