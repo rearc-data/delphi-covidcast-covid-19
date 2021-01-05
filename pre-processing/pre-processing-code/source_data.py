@@ -8,6 +8,7 @@ from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 from multiprocessing.dummy import Pool
 from io import StringIO
+import math
 
 s3_bucket = os.environ['S3_BUCKET']
 data_set_arn = os.environ['DATA_SET_ARN']
@@ -212,11 +213,14 @@ def source_dataset():
 
         print('Files to be updated', update_meta)
 
+        threads = math.floor(len(update_meta) / 2)
+        if threads > 6:
+            threads = 6
+        if threads == 0:
+            threads = 1
+
         # mutlithreading to run multiple requests to the covidcast api enpoint
         # in parallel to each other
-        threads = 8
-        if all((meta['data_source'] == 'safegraph' and meta['geo_type'] == 'county') for meta in update_meta):
-            threads = 2
         with Pool(threads) as p:
             asset_lists = p.map(query_and_save_api, update_meta)
 
