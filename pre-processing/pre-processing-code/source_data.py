@@ -105,7 +105,7 @@ def query_and_save_api(meta):
             start = start + timedelta(weeks=time_pre_step)
             step = step + timedelta(weeks=time_pre_step)
 
-    with Pool(8) as p:
+    with Pool(12) as p:
         complete_data = p.map(download_dataset, source_urls)
 
     complete_data = [datum for data in complete_data for datum in data]
