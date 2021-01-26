@@ -112,22 +112,32 @@ def query_and_save_api(meta):
 
     complete_jsonl_key = new_s3_key + 'jsonl/' + \
         filename.replace('~', '/') + '.jsonl'
-    jsonl_encode = '\n'.join(json.dumps(datum)
-                             for datum in complete_data).encode()
+
+    jsonl_encode = None
+    if len(complete_data) == 0:
+        jsonl_encode = ''.encode()
+    else:
+        jsonl_encode = '\n'.join(json.dumps(datum)
+                                 for datum in complete_data).encode()
     s3.put_object(Body=jsonl_encode, Bucket=s3_bucket, Key=complete_jsonl_key)
     jsonl_encode = None
 
     complete_csv_key = new_s3_key + 'csv/' + \
         filename.replace('~', '/') + '.csv'
-    csv_encode = StringIO()
-    writer = csv.DictWriter(csv_encode, fieldnames=complete_data[0])
-    writer.writeheader()
-    writer.writerows(complete_data)
-    complete_data = None
-    csv_encode = csv_encode.getvalue().encode()
+
+    csv_encode = None
+
+    if len(complete_data) == 0:
+        csv_encode = ''.encode()
+    else:
+        csv_encode = StringIO()
+        writer = csv.DictWriter(csv_encode, fieldnames=complete_data[0])
+        writer.writeheader()
+        writer.writerows(complete_data)
+        complete_data = None
+        csv_encode = csv_encode.getvalue().encode()
 
     s3.put_object(Body=csv_encode, Bucket=s3_bucket, Key=complete_csv_key)
-
     csv_encode = None
 
     print('Uploaded ' + filename)
