@@ -67,7 +67,7 @@ def query_and_save_api(meta):
 
     # Constructs `filename` from data params
     filename = '/{}/{}/{}/{}.'.format(data_source, signal, time_type, geo_type)
-    print('Starting ' + filename)
+    print('Starting {}'.format(filename))
 
     # Delphi COVIDcast has a max limit of 3649 rows returned per API call
     # `time_pre_step` calculates the max num of days that can be requested per call
@@ -141,7 +141,7 @@ def query_and_save_api(meta):
     bucket.put_object(Body=csv_encode, Key=csv_key)
     csv_encode = None
 
-    print('Uploaded ' + filename)
+    print('Uploaded {}'.format(filename))
 
     return [
         {'Bucket': s3_bucket, 'Key': jsonl_key},
@@ -187,10 +187,10 @@ def source_dataset():
             keys[object.key] = object.last_modified.timestamp()
 
         for meta in metadata:
-            meta_key = '{}/{}/{}/{}.'.format(
+            meta_key = '/{}/{}/{}/{}.'.format(
                 meta['data_source'], meta['signal'], meta['time_type'], meta['geo_type'])
-            csv_key = '{}csv/{}csv'.format(new_s3_key, meta_key)
-            jsonl_key = '{}jsonl/{}jsonl'.format(new_s3_key, meta_key)
+            csv_key = '{}csv{}csv'.format(new_s3_key, meta_key)
+            jsonl_key = '{}jsonl{}jsonl'.format(new_s3_key, meta_key)
             update = True
             if csv_key in keys and jsonl_key in keys:
                 if keys[csv_key] > meta['last_update'] and keys[jsonl_key] > meta['last_update']:
