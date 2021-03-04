@@ -3,8 +3,8 @@ import json
 from source_data import source_dataset
 import boto3
 import os
-from datetime import date, datetime
-import math
+from datetime import date
+from multiprocessing.dummy import Pool
 
 os.environ['AWS_DATA_PATH'] = '/opt/'
 region = os.environ['REGION']
@@ -70,12 +70,55 @@ def start_change_set(describe_entity_response, revision_arn):
     return response
 
 
+def jobs_handler(data):
+
+    # Used to store the Ids of the Jobs importing the assets to S3.
+    job_ids = set()
+
+    print('Job {} of {} started'.format(
+        data['job_num'], data['total_jobs']))
+
+    import_job = dataexchange.create_job(
+        Type='IMPORT_ASSETS_FROM_S3',
+        Details={
+            'ImportAssetsFromS3': {
+                'DataSetId': data_set_id,
+                'RevisionId': data['revision_id'],
+                'AssetSources': data['asset_list']
+            }
+        }
+    )
+
+    # Start the Job and save the JobId.
+    dataexchange.start_job(JobId=import_job['Id'])
+    job_ids.add(import_job['Id'])
+
+    # Iterate until all remaining jobs have reached a terminal state, or an error is found.
+    completed_jobs = set()
+
+    while job_ids != completed_jobs:
+        for job_id in job_ids:
+            if job_id in completed_jobs:
+                continue
+            get_job_response = dataexchange.get_job(JobId=job_id)
+            if get_job_response['State'] == 'COMPLETED':
+                print('JobId: {}, Job {} of {} completed'.format(
+                    job_id, data['job_num'], data['total_jobs']))
+                completed_jobs.add(job_id)
+            if get_job_response['State'] == 'ERROR':
+                job_errors = get_job_response['Errors']
+                raise Exception(
+                    'JobId: {} failed with errors:\n{}'.format(job_id, job_errors))
+            # Sleep to ensure we don't get throttled by the GetJob API.
+            time.sleep(0.2)
+
+
 def lambda_handler(event, context):
-    asset_list = source_dataset()
+    asset_lists = source_dataset()
 
-    if type(asset_list) == list:
+    if type(asset_lists) == list:
 
-        if len(asset_list) == 0:
+        if len(asset_lists) == 0:
             print(
                 'No need for a revision, all datasets included with this product are current')
             return {
@@ -88,57 +131,14 @@ def lambda_handler(event, context):
         revision_id = create_revision_response['Id']
         revision_arn = create_revision_response['Arn']
 
-        print('Total assets to be uploaded', len(asset_list))
+        for idx in range(len(asset_lists)):
+            asset_lists[idx] = {
+                'asset_list': asset_lists[idx], 'revision_id': revision_id, 'job_num': str(idx + 1), 'total_jobs': str(len(asset_lists))}
 
-        start_index = 0
-        total_jobs = math.floor(len(asset_list) / 100) + 1
+        print('Assets lists for revision:', asset_lists)
 
-        while(start_index < len(asset_list)):
-
-            # Used to store the Ids of the Jobs importing the assets to S3.
-            job_ids = set()
-
-            end_index = len(asset_list) if len(asset_list) - \
-                start_index < 100 else start_index + 100
-
-            print('asset_list {}:'.format(math.floor(start_index/100) + 1),
-                  asset_list[start_index:end_index])
-
-            import_job = dataexchange.create_job(
-                Type='IMPORT_ASSETS_FROM_S3',
-                Details={
-                    'ImportAssetsFromS3': {
-                        'DataSetId': data_set_id,
-                        'RevisionId': revision_id,
-                        'AssetSources': asset_list[start_index:end_index]
-                    }
-                }
-            )
-
-            # Start the Job and save the JobId.
-            dataexchange.start_job(JobId=import_job['Id'])
-            job_ids.add(import_job['Id'])
-
-            # Iterate until all remaining jobs have reached a terminal state, or an error is found.
-            completed_jobs = set()
-
-            while job_ids != completed_jobs:
-                for job_id in job_ids:
-                    if job_id in completed_jobs:
-                        continue
-                    get_job_response = dataexchange.get_job(JobId=job_id)
-                    if get_job_response['State'] == 'COMPLETED':
-                        print('JobId: {}, Job {} of {} completed'.format(
-                            job_id, math.floor(start_index/100) + 1, total_jobs))
-                        completed_jobs.add(job_id)
-                    if get_job_response['State'] == 'ERROR':
-                        job_errors = get_job_response['Errors']
-                        raise Exception(
-                            'JobId: {} failed with errors:\n{}'.format(job_id, job_errors))
-                    # Sleep to ensure we don't get throttled by the GetJob API.
-                    time.sleep(0.2)
-
-            start_index = start_index + 100
+        with Pool(10) as p:
+            p.map(jobs_handler, asset_lists)
 
         update_revision_response = dataexchange.update_revision(
             DataSetId=data_set_id, RevisionId=revision_id, Comment=revision_comment, Finalized=True)

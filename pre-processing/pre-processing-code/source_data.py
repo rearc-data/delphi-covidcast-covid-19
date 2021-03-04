@@ -1,6 +1,6 @@
 import json
 import csv
-from datetime import date, timedelta, datetime, timezone
+from datetime import timedelta, datetime
 import boto3
 import os
 import time
@@ -10,6 +10,7 @@ from multiprocessing.dummy import Pool
 from io import StringIO
 import math
 
+region = os.environ['REGION']
 s3_bucket = os.environ['S3_BUCKET']
 data_set_arn = os.environ['DATA_SET_ARN']
 data_set_id = data_set_arn.split('/', 1)[1]
@@ -18,11 +19,11 @@ new_s3_key = data_set_name + '/dataset/'
 
 if not s3_bucket:
     raise Exception("'S3_BUCKET' environment variable must be defined!")
-
 if not new_s3_key:
     raise Exception("'DATA_SET_NAME' environment variable must be defined!")
 
-s3 = boto3.client('s3')
+bucket = boto3.resource('s3').Bucket(s3_bucket)
+api_base_url = 'https://api.covidcast.cmu.edu/epidata/api.php?endpoint=covidcast'
 
 
 def download_dataset(source_dataset_url):
@@ -65,13 +66,12 @@ def query_and_save_api(meta):
     num_locations = meta['num_locations']
 
     # Constructs `filename` from data params
-    filename = data_source + '~' + signal + '~' + time_type + '~' + geo_type
-
+    filename = '/{}/{}/{}/{}.'.format(data_source, signal, time_type, geo_type)
     print('Starting ' + filename)
 
-    # Delphi COVIDcast has a max limit of 3650 rows returned per API call
+    # Delphi COVIDcast has a max limit of 3649 rows returned per API call
     # `time_pre_step` calculates the max num of days that can be requested per call
-    time_pre_step = int(3650 / num_locations)
+    time_pre_step = math.floor(3649 / num_locations)
 
     # Constructs date variables to be used to keep track of incrementing date windows
     if len(min_time) == 8 and time_type == 'day':
@@ -83,6 +83,8 @@ def query_and_save_api(meta):
         step = start + timedelta(weeks=(time_pre_step - 1))
         end = datetime.strptime(max_time + '1', '%G%V%u')
 
+    meta_query = '&data_source={}&signal={}&time_type={}&geo_type={}&time_values='.format(
+        data_source, signal, time_type, geo_type)
     source_urls = []
 
     # Loop only while the date assigned to `start` is eariler or the same as the date assigned to `end`
@@ -94,8 +96,9 @@ def query_and_save_api(meta):
             current_start = start.strftime('%G%V')
             current_end = step.strftime('%G%V')
 
-        source_urls.append('https://delphi.cmu.edu/epidata/api.php?source=covidcast&data_source=' + data_source + '&signal=' + signal +
-                           '&time_type=' + time_type + '&geo_type=' + geo_type + '&time_values=' + current_start + '-' + current_end + '&geo_value=*')
+        current_url = '{}{}{}-{}&geo_value=*'.format(
+            api_base_url, meta_query, current_start, current_end)
+        source_urls.append(current_url)
 
         # Increments the date range by the `time_pre_step` value
         if len(min_time) == 8 and time_type == 'day':
@@ -110,8 +113,7 @@ def query_and_save_api(meta):
 
     complete_data = [datum for data in complete_data for datum in data]
 
-    complete_jsonl_key = new_s3_key + 'jsonl/' + \
-        filename.replace('~', '/') + '.jsonl'
+    jsonl_key = '{}jsonl{}jsonl'.format(new_s3_key, filename)
 
     jsonl_encode = None
     if len(complete_data) == 0:
@@ -119,11 +121,10 @@ def query_and_save_api(meta):
     else:
         jsonl_encode = '\n'.join(json.dumps(datum)
                                  for datum in complete_data).encode()
-    s3.put_object(Body=jsonl_encode, Bucket=s3_bucket, Key=complete_jsonl_key)
+    bucket.put_object(Body=jsonl_encode, Key=jsonl_key)
     jsonl_encode = None
 
-    complete_csv_key = new_s3_key + 'csv/' + \
-        filename.replace('~', '/') + '.csv'
+    csv_key = '{}csv{}csv'.format(new_s3_key, filename)
 
     csv_encode = None
 
@@ -137,21 +138,21 @@ def query_and_save_api(meta):
         complete_data = None
         csv_encode = csv_encode.getvalue().encode()
 
-    s3.put_object(Body=csv_encode, Bucket=s3_bucket, Key=complete_csv_key)
+    bucket.put_object(Body=csv_encode, Key=csv_key)
     csv_encode = None
 
     print('Uploaded ' + filename)
 
     return [
-        {'Bucket': s3_bucket, 'Key': complete_jsonl_key},
-        {'Bucket': s3_bucket, 'Key': complete_csv_key}
+        {'Bucket': s3_bucket, 'Key': jsonl_key},
+        {'Bucket': s3_bucket, 'Key': csv_key}
     ]
 
 
 def source_dataset():
 
     # Response from covidcast_meta enpoint in Delphi API
-    meta_url = 'https://delphi.cmu.edu/epidata/api.php?source=covidcast_meta'
+    meta_url = '{}_meta'.format(api_base_url)
     metadata = None
 
     retries = 5
@@ -178,48 +179,40 @@ def source_dataset():
     if metadata['result'] == 1:
         metadata = metadata['epidata']
 
-        objects = s3.list_objects_v2(
-            Bucket=s3_bucket, Prefix=('{}csv/'.format(new_s3_key)))
-
         keys = {}
-
-        if 'Contents' in objects:
-            for obj in objects['Contents']:
-                key = obj['Key'].split(
-                    '{}csv/'.format(new_s3_key), 1)[1].split('.csv', 1)[0]
-                keys[key] = obj['LastModified']
-
-        existing_meta = []
+        existing_assets = []
         update_meta = []
 
+        for object in bucket.objects.filter(Prefix=new_s3_key):
+            keys[object.key] = object.last_modified.timestamp()
+
         for meta in metadata:
-            last_updated = datetime.fromtimestamp(
-                meta['last_update'], timezone.utc)
-            meta_key = '{}/{}/{}/{}'.format(meta['data_source'],
-                                            meta['signal'], meta['time_type'], meta['geo_type'])
-
-            if meta_key in keys:
-                if last_updated > keys[meta_key]:
-                    update_meta.append(meta)
-                else:
-                    existing_meta = existing_meta + [{'Bucket': s3_bucket, 'Key': '{}csv/{}.csv'.format(
-                        new_s3_key, meta_key)}, {'Bucket': s3_bucket, 'Key': '{}jsonl/{}.jsonl'.format(new_s3_key, meta_key)}]
-            else:
+            meta_key = '{}/{}/{}/{}.'.format(
+                meta['data_source'], meta['signal'], meta['time_type'], meta['geo_type'])
+            csv_key = '{}csv/{}csv'.format(new_s3_key, meta_key)
+            jsonl_key = '{}jsonl/{}jsonl'.format(new_s3_key, meta_key)
+            update = True
+            if csv_key in keys and jsonl_key in keys:
+                if keys[csv_key] > meta['last_update'] and keys[jsonl_key] > meta['last_update']:
+                    update = False
+            if update:
                 update_meta.append(meta)
+            else:
+                existing_assets.extend(({'Bucket': s3_bucket, 'Key': csv_key}, {
+                                       'Bucket': s3_bucket, 'Key': jsonl_key}))
 
-        if len(existing_meta) > 0 and len(update_meta) == 0:
+        if len(existing_assets) > 0 and len(update_meta) == 0:
             dataexchange = boto3.client(
                 service_name='dataexchange',
-                region_name=os.environ['REGION']
+                region_name=region
             )
-            list_data_set_revisions = dataexchange.list_data_set_revisions(
+            last_adx_revision = dataexchange.list_data_set_revisions(
                 DataSetId=data_set_id,
                 MaxResults=1
             )
-            if list_data_set_revisions['Revisions'][0]['Finalized'] == False:
-                return existing_meta
-            else:
+            if last_adx_revision['Revisions'][0]['Finalized']:
                 return []
+            return [existing_assets[i:i + 100] for i in range(0, len(existing_assets), 100)]
 
         print('Files to be updated', update_meta)
 
@@ -240,7 +233,7 @@ def source_dataset():
         jsonl_key = new_s3_key + 'jsonl/covidcast_meta.jsonl'
         jsonl_encode = '\n'.join(json.dumps(datum)
                                  for datum in metadata).encode()
-        s3.put_object(Body=jsonl_encode, Bucket=s3_bucket, Key=jsonl_key)
+        bucket.put_object(Body=jsonl_encode, Key=jsonl_key)
         jsonl_encode = None
         asset_lists.append({'Bucket': s3_bucket, 'Key': jsonl_key})
 
@@ -251,9 +244,15 @@ def source_dataset():
         writer.writerows(metadata)
         metadata = None
         csv_encode = csv_encode.getvalue().encode()
-        s3.put_object(Body=csv_encode, Bucket=s3_bucket, Key=csv_key)
+        bucket.put_object(Body=csv_encode, Key=csv_key)
         csv_encode = None
+        asset_lists.append({'Bucket': s3_bucket, 'Key': csv_key})
 
         print('Uploaded covidcast-meta')
+        asset_lists.extend(existing_assets)
 
-        return asset_lists + existing_meta
+        return [asset_lists[i:i + 100] for i in range(0, len(asset_lists), 100)]
+
+    else:
+        raise Exception(
+            'There was a problem accessing the covidcast_metadata endpoint')
