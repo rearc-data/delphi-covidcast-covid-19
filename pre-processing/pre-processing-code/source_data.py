@@ -187,19 +187,22 @@ def source_dataset():
             keys[object.key] = object.last_modified.timestamp()
 
         for meta in metadata:
-            meta_key = '/{}/{}/{}/{}.'.format(
-                meta['data_source'], meta['signal'], meta['time_type'], meta['geo_type'])
-            csv_key = '{}csv{}csv'.format(new_s3_key, meta_key)
-            jsonl_key = '{}jsonl{}jsonl'.format(new_s3_key, meta_key)
-            update = True
-            if csv_key in keys and jsonl_key in keys:
-                if keys[csv_key] > meta['last_update'] and keys[jsonl_key] > meta['last_update']:
-                    update = False
-            if update:
-                update_meta.append(meta)
-            else:
-                existing_assets.extend(({'Bucket': s3_bucket, 'Key': csv_key}, {
-                                       'Bucket': s3_bucket, 'Key': jsonl_key}))
+            # 6/24/21 - nchs-mortality data_source is causing product revision issues,
+            # so lets whitelist those datasets for the time being
+            if meta['data_source'] != 'nchs-mortality':
+                meta_key = '/{}/{}/{}/{}.'.format(
+                    meta['data_source'], meta['signal'], meta['time_type'], meta['geo_type'])
+                csv_key = '{}csv{}csv'.format(new_s3_key, meta_key)
+                jsonl_key = '{}jsonl{}jsonl'.format(new_s3_key, meta_key)
+                update = True
+                if csv_key in keys and jsonl_key in keys:
+                    if keys[csv_key] > meta['last_update'] and keys[jsonl_key] > meta['last_update']:
+                        update = False
+                if update:
+                    update_meta.append(meta)
+                else:
+                    existing_assets.extend(({'Bucket': s3_bucket, 'Key': csv_key}, {
+                                        'Bucket': s3_bucket, 'Key': jsonl_key}))
 
         if len(existing_assets) > 0 and len(update_meta) == 0:
             dataexchange = boto3.client(
